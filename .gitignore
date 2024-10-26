@@ -1,0 +1,12 @@
+# Ignore Visual Studio temporary files, build results, and
+# folder for personal Visual Studio settings
+.vs/
+*.user
+*.suo
+
+# Auto-generated files
+bin/
+obj/
+
+# Exclude the entire .vs directory
+ApiAggregation/.vs/
