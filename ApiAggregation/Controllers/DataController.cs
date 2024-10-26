@@ -15,9 +15,9 @@ namespace ApiAggregation.Controllers
         }
 
         [HttpGet("aggregated")]
-        public async Task<IActionResult> GetAggregatedData()
+        public async Task<IActionResult> GetAggregatedData([FromQuery] string? city = null)
         {
-            var data = await _aggregationService.GetAggregatedDataAsync();
+            var data = await _aggregationService.GetAggregatedDataAsync(city);
             return Ok(data);
         }
     }
