@@ -1,4 +1,5 @@
 ﻿using ApiAggregation.Clients;
+using Serilog;
 
 namespace ApiAggregation.Services
 {
@@ -10,12 +11,20 @@ namespace ApiAggregation.Services
         {
             _openWeatherClient = openWeatherClient;
         }
-        public async Task<Dictionary<string, object>> GetAggregatedDataAsync()
+        public async Task<Dictionary<string, object>> GetAggregatedDataAsync(string? city = null)
         {
             var result = new Dictionary<string, object>();
 
-            var weatherData = await _openWeatherClient.GetDataAsync();
-            result.Add("weather", weatherData);
+            // Fetch weather data with error handling OpenWeatherClient
+            try
+            {
+                var weatherData = await _openWeatherClient.GetDataAsync(city ?? "DefaultCity");
+                result.Add("weather", weatherData);
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "Failed to retrieve weather data for city {City}", city);
+            }
 
             return result;
 
