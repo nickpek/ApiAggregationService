@@ -14,10 +14,17 @@ namespace ApiAggregation.Clients
             _httpClient = httpClient;
         }
 
-        public async Task<object> GetDataAsync(string city)
+        public async Task<object> GetDataAsync(string? city)
         {
-            // Validate the input
-            ValidateCityInput(city);
+            try
+            {
+                ValidateCityInput(city);
+            }
+            catch (ArgumentException ex)
+            {
+                Console.WriteLine(ex.Message); // Log or handle validation exception
+                return GetWeatherFallback("Invalid city name provided.");
+            }
 
             int retryCount = 0;
             TimeSpan delay = InitialDelay;
@@ -42,7 +49,7 @@ namespace ApiAggregation.Clients
                 {
                     // Handle specific status codes, e.g., Not Found
                     Console.WriteLine($"City '{city}' not found in the weather API.");
-                    return GetWeatherFallback(city, "City not found.");
+                    return GetWeatherFallback("City not found.");
                 }
                 catch (Exception ex)
                 {
@@ -54,7 +61,7 @@ namespace ApiAggregation.Clients
                     if (retryCount >= MaxRetries)
                     {
                         Log.Error("Max retries reached. Returning fallback data for city '{City}'", city);
-                        return GetWeatherFallback(city, "Unable to fetch weather data after retries.");
+                        return GetWeatherFallback("Unable to fetch weather data after retries.");
                     }
 
                     await Task.Delay(delay);
@@ -63,22 +70,22 @@ namespace ApiAggregation.Clients
             }
 
             // Return fallback in case of unknown failure
-            return GetWeatherFallback(city, "Unexpected error occurred.");
+            return GetWeatherFallback("Unexpected error occurred.");
         }
 
-        private static void ValidateCityInput(string city)
+        private static void ValidateCityInput(string? city)
         {
             if (string.IsNullOrWhiteSpace(city))
             {
-                throw new ArgumentException("City name must be provided.", nameof(city));
+                throw new ArgumentException("City name must be provided and cannot be empty.", nameof(city));
             }
         }
 
-        private static object GetWeatherFallback(string city, string reason)
+        private static object GetWeatherFallback(string reason)
         {
             return new
             {
-                city,
+                city = "Unknown",
                 description = reason,
                 temperature = "N/A",
                 humidity = "N/A"

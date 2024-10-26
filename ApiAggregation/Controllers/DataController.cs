@@ -1,5 +1,6 @@
 ﻿using ApiAggregation.Services;
 using Microsoft.AspNetCore.Mvc;
+using System.Diagnostics.Metrics;
 
 namespace ApiAggregation.Controllers
 {
@@ -15,9 +16,9 @@ namespace ApiAggregation.Controllers
         }
 
         [HttpGet("aggregated")]
-        public async Task<IActionResult> GetAggregatedData([FromQuery] string? city = null)
+        public async Task<IActionResult> GetAggregatedData([FromQuery] string? city = null, [FromQuery] string? country = null)
         {
-            var data = await _aggregationService.GetAggregatedDataAsync(city);
+            var data = await _aggregationService.GetAggregatedDataAsync(city, country);
             return Ok(data);
         }
     }

@@ -11,7 +11,10 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 builder.Services.AddHttpClient();
+// Register individual API clients
 builder.Services.AddScoped<OpenWeatherClient>();
+builder.Services.AddScoped<NewsApiClient>();
+
 builder.Services.AddScoped<AggregationService>();
 
 
