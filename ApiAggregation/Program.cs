@@ -1,4 +1,5 @@
 using ApiAggregation.Clients;
+using ApiAggregation.Clients.ApiAggregation.Clients;
 using ApiAggregation.Services;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -14,6 +15,7 @@ builder.Services.AddHttpClient();
 // Register individual API clients
 builder.Services.AddScoped<OpenWeatherClient>();
 builder.Services.AddScoped<NewsApiClient>();
+builder.Services.AddHttpClient<ApiFootballClient>();
 
 builder.Services.AddScoped<AggregationService>();
 
