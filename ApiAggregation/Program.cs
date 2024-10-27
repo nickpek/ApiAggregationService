@@ -1,5 +1,4 @@
 using ApiAggregation.Clients;
-using ApiAggregation.Clients.ApiAggregation.Clients;
 using ApiAggregation.Services;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -12,10 +11,12 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 builder.Services.AddHttpClient();
-// Register individual API clients
-builder.Services.AddScoped<OpenWeatherClient>();
-builder.Services.AddScoped<NewsApiClient>();
-builder.Services.AddHttpClient<ApiFootballClient>();
+// Register individual API clients and each interface with its implementation
+builder.Services.AddScoped<IOpenWeatherClient, OpenWeatherClient>();
+builder.Services.AddScoped<INewsApiClient, NewsApiClient>();
+builder.Services.AddScoped<IApiFootballClient, ApiFootballClient>();
+builder.Services.AddHttpClient<IApiFootballClient, ApiFootballClient>();
+
 
 builder.Services.AddScoped<AggregationService>();
 

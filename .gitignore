@@ -11,4 +11,4 @@ obj/
 # Exclude the entire .vs directory
 ApiAggregation/.vs/
 # Ignore sensitive configuration file
-appsettings.Development.json
+ApiAggregation/appsettings.Development.json

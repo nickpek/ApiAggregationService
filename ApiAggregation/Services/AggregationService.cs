@@ -1,5 +1,5 @@
 ﻿using ApiAggregation.Clients;
-using ApiAggregation.Clients.ApiAggregation.Clients;
+using ApiAggregation.Utilities;
 using Serilog;
 using System.Globalization;
 
@@ -7,17 +7,14 @@ namespace ApiAggregation.Services
 {
     public class AggregationService
     {
-        private readonly OpenWeatherClient _openWeatherClient;
-        private readonly NewsApiClient _newsApiClient;
-        private readonly ApiFootballClient _apiFootballClient;
-
-
-        public AggregationService(OpenWeatherClient openWeatherClient, NewsApiClient newsApiClient, ApiFootballClient apiFootballClient)
+        private readonly IOpenWeatherClient _openWeatherClient;
+        private readonly INewsApiClient _newsApiClient;
+        private readonly IApiFootballClient _apiFootballClient;
+        public AggregationService(IOpenWeatherClient openWeatherClient, INewsApiClient newsApiClient, IApiFootballClient apiFootballClient)
         {
             _openWeatherClient = openWeatherClient;
             _newsApiClient = newsApiClient;
             _apiFootballClient = apiFootballClient;
-
         }
         public async Task<Dictionary<string, object>> GetAggregatedDataAsync(string? city = null, string? country = null, bool sortByTeamName = true)
         {
@@ -34,16 +31,21 @@ namespace ApiAggregation.Services
             catch (Exception ex)
             {
                 Log.Error(ex, "Failed to retrieve weather data for city {City}", city);
+                result.Add("weather", FallbackUtilites.GetWeatherFallback(city));
+
             }
             // Fetch news data with error handling NewsApiClient
             try
             {
                 var newsData = await _newsApiClient.GetDataAsync(countryCode);
                 result.Add("news", newsData);
+
             }
             catch (Exception ex)
             {
                 Log.Error(ex, "Failed to retrieve news data for country {Country}", countryCode);
+                result.Add("news", FallbackUtilites.GetNewsFallback("News data currently unavailable."));
+
             }
             // Fetch football teams data with country name for filtering and sorting by team name if specified
             if (!string.IsNullOrEmpty(countryName))
@@ -56,6 +58,7 @@ namespace ApiAggregation.Services
                 catch (Exception ex)
                 {
                     Log.Error(ex, "Failed to retrieve football data for country {CountryName}", countryName);
+                    result.Add("football", FallbackUtilites.GetTeamsFallback("Teams data currently unavailable."));
                 }
             }
             else
@@ -64,10 +67,11 @@ namespace ApiAggregation.Services
             }
 
 
+
             return result;
 
         }
-        private static (string? countryCode, string? countryName) ParseCountryInput(string? country)
+        public static (string? countryCode, string? countryName) ParseCountryInput(string? country)
         {
             if (string.IsNullOrWhiteSpace(country))
                 return (null, null);

@@ -1,8 +1,10 @@
-﻿using System.Text.Json;
+﻿using ApiAggregation.Utilities;
+using Serilog;
+using System.Text.Json;
 
 namespace ApiAggregation.Clients
 {
-    public class NewsApiClient 
+    public class NewsApiClient: INewsApiClient
     {
         private readonly HttpClient _httpClient;
         private readonly string _apiKey = "289d0bae47784394a56c52b21155d647";
@@ -23,8 +25,8 @@ namespace ApiAggregation.Clients
             }
             catch (ArgumentException ex)
             {
-                Console.WriteLine(ex.Message); // Log or handle validation exception
-                return GetNewsFallback("Invalid country code provided.");
+                Log.Warning(ex, "Invalid country code provided: {Country}", country);
+                return FallbackUtilites.GetNewsFallback("Invalid country code provided.");
             }
 
             int retryCount = 0;
@@ -63,21 +65,20 @@ namespace ApiAggregation.Clients
                 catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
                 {
                     // Handle specific status codes, e.g., Not Found
-                    Console.WriteLine($"Country '{country}' not found in the news API.");
-                    return GetNewsFallback("Country not found in the news API.");
+                    Log.Warning("Country '{Country}' not found in the news API.", country);
+                    return FallbackUtilites.GetNewsFallback("Country not found in the news API.");
                 }
                 catch (Exception ex)
                 {
                     retryCount++;
 
-                    // Log the error
-                    Console.WriteLine($"Error fetching news data for country '{country}': {ex.Message}");
+                    Log.Warning(ex, "Error fetching news data for country '{Country}' on attempt {RetryCount}", country, retryCount);
 
                     // Check if retries have been exhausted
                     if (retryCount >= MaxRetries)
                     {
-                        Console.WriteLine("Max retries reached. Returning fallback data for news API.");
-                        return GetNewsFallback("Unable to fetch news data after retries.");
+                        Log.Error("Max retries reached. Returning fallback data for news API.");
+                        return FallbackUtilites.GetNewsFallback("Unable to fetch news data after retries.");
                     }
 
                     // Wait before retrying (exponential backoff)
@@ -87,38 +88,18 @@ namespace ApiAggregation.Clients
             }
 
             // Return fallback in case of unknown failure
-            return GetNewsFallback("Unexpected error occurred.");
+            return FallbackUtilites.GetNewsFallback("Unexpected error occurred.");
         }
 
         private static void ValidateCountryInput(string? country)
         {
             if (string.IsNullOrWhiteSpace(country))
             {
+                Log.Warning("Country name validation failed. Provided country name is null or whitespace.");
                 throw new ArgumentException("Country code must be provided.", nameof(country));
             }
         }
 
-        private static object GetNewsFallback(string reason)
-        {
-            return new
-            {
-                status = "error",
-                message = reason,
-                articles = new[]
-                {
-                    new
-                    {
-                        source = new { id = "fallback", name = "Fallback News Source" },
-                        author = "N/A",
-                        title = "News data currently unavailable.",
-                        description = "Please try again later.",
-                        url = "#",
-                        urlToImage = "#",
-                        publishedAt = DateTime.UtcNow,
-                        content = "N/A"
-                    }
-                }
-            };
-        }
+       
     }
 }

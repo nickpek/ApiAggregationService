@@ -1,8 +1,9 @@
-﻿using Serilog;
+﻿using ApiAggregation.Utilities;
+using Serilog;
 
 namespace ApiAggregation.Clients
 {
-    public class OpenWeatherClient
+    public class OpenWeatherClient: IOpenWeatherClient
     {
         private readonly HttpClient _httpClient;
         private readonly string _apiKey = "8a937d73802006b74ec8384472056e32";
@@ -22,8 +23,8 @@ namespace ApiAggregation.Clients
             }
             catch (ArgumentException ex)
             {
-                Console.WriteLine(ex.Message); // Log or handle validation exception
-                return GetWeatherFallback("Invalid city name provided.");
+                Log.Warning(ex, "Invalid city name provided: {City}", city);
+                return FallbackUtilites.GetWeatherFallback("Invalid city name provided.");
             }
 
             int retryCount = 0;
@@ -48,8 +49,8 @@ namespace ApiAggregation.Clients
                 catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
                 {
                     // Handle specific status codes, e.g., Not Found
-                    Console.WriteLine($"City '{city}' not found in the weather API.");
-                    return GetWeatherFallback("City not found.");
+                    Log.Warning("City '{City}' not found in the weather API.", city);
+                    return FallbackUtilites.GetWeatherFallback("City not found.");
                 }
                 catch (Exception ex)
                 {
@@ -61,7 +62,7 @@ namespace ApiAggregation.Clients
                     if (retryCount >= MaxRetries)
                     {
                         Log.Error("Max retries reached. Returning fallback data for city '{City}'", city);
-                        return GetWeatherFallback("Unable to fetch weather data after retries.");
+                        return FallbackUtilites.GetWeatherFallback("Unable to fetch weather data after retries.");
                     }
 
                     await Task.Delay(delay);
@@ -70,26 +71,19 @@ namespace ApiAggregation.Clients
             }
 
             // Return fallback in case of unknown failure
-            return GetWeatherFallback("Unexpected error occurred.");
+            return FallbackUtilites.GetWeatherFallback("Unexpected error occurred.");
         }
+
 
         private static void ValidateCityInput(string? city)
         {
             if (string.IsNullOrWhiteSpace(city))
             {
+                Log.Warning("City name validation failed. Provided city name is null or whitespace.");
                 throw new ArgumentException("City name must be provided and cannot be empty.", nameof(city));
             }
         }
 
-        private static object GetWeatherFallback(string reason)
-        {
-            return new
-            {
-                city = "Unknown",
-                description = reason,
-                temperature = "N/A",
-                humidity = "N/A"
-            };
-        }
+
     }
 }
