@@ -45,7 +45,7 @@ This service combines these datasets into a single, unified API response, allowi
 Ensure your configuration files (e.g., appsettings.json and appsettings.Development.json) include your API key and other necessary environment settings.
 
 ## API Endpoints
-
+1. **Endpoint 1: Aggrefated Data**
 ### GET /api/data/aggregated
 Fetches aggregated data based on the specified city and country.
 
@@ -197,6 +197,47 @@ Fallback mechanism response:
     ]
   }
 }
+
+2. **Endpoint 1: Aggrefated Data**
+### GET /api/data/statistics
+Provides request count and average response times for each API, grouped by performance buckets.
+
+Example Request:
+GET http://localhost:5076/api/statistics/request-stats
+
+Response:
+JSON object containing request statistics, such as the total number of requests and average response time for each API. Data is grouped into performance buckets:
+- fast (<100ms)
+- average (100–200ms)
+- slow (>200ms)
+
+{
+  "ApiFootball": {
+    "totalRequests": 2,
+    "averageResponseTime": 263.38964999999996,
+    "fastRequests": 1,
+    "averageRequests": 0,
+    "slowRequests": 1
+  },
+  "OpenWeather": {
+    "totalRequests": 2,
+    "averageResponseTime": 144.57195000000002,
+    "fastRequests": 1,
+    "averageRequests": 0,
+    "slowRequests": 1
+  },
+  "NewsApi": {
+    "totalRequests": 2,
+    "averageResponseTime": 525.9739,
+    "fastRequests": 0,
+    "averageRequests": 0,
+    "slowRequests": 2
+  }
+}
+
+
+Request statistics
+The service tracks the number of requests and response times for each API (Weather, News, and Football) using in-memory storage. This helps with analyzing API performance and identifying potential bottlenecks.
 
 ## Testing
 

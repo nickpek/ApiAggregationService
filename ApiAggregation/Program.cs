@@ -19,6 +19,7 @@ builder.Services.AddHttpClient<IApiFootballClient, ApiFootballClient>();
 
 
 builder.Services.AddScoped<AggregationService>();
+builder.Services.AddSingleton<ApiStatisticsService>();
 
 
 var app = builder.Build();

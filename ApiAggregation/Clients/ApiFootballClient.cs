@@ -1,7 +1,8 @@
-﻿using ApiAggregation.Utilities;
+﻿using ApiAggregation.Services;
+using ApiAggregation.Utilities;
 using Serilog;
+using System.Diagnostics;
 using System.Net;
-using System.Net.Http.Headers;
 using System.Text.Json;
 
 namespace ApiAggregation.Clients
@@ -12,10 +13,13 @@ namespace ApiAggregation.Clients
         private readonly string _apiKey;
         private const int MaxRetries = 3;
         private readonly TimeSpan InitialDelay = TimeSpan.FromSeconds(2);
+        private readonly ApiStatisticsService _statisticsService;
 
-        public ApiFootballClient(HttpClient httpClient, IConfiguration configuration)
+        public ApiFootballClient(HttpClient httpClient, IConfiguration configuration, ApiStatisticsService statisticsService)
         {
             _httpClient = httpClient;
+            _statisticsService = statisticsService;
+
             _apiKey = configuration["ApiKeys:ApiFootball"]
                       ?? throw new ArgumentNullException("API key for Api-Football is missing.");
 
@@ -25,6 +29,8 @@ namespace ApiAggregation.Clients
 
         public async Task<object> GetTeamsDataAsync(string? country, bool sortByName = true)
         {
+            var stopwatch = Stopwatch.StartNew();
+
             try
             {
                 // Validate input with error handling
@@ -33,6 +39,7 @@ namespace ApiAggregation.Clients
             catch (ArgumentException ex)
             {
                 Log.Warning(ex, "Invalid country code provided: {Country}", country);
+                _statisticsService.TrackRequest("ApiFootball", stopwatch.Elapsed.TotalMilliseconds);
                 return FallbackUtilites.GetTeamsFallback("Invalid country code provided.");
             }
 
@@ -57,6 +64,8 @@ namespace ApiAggregation.Clients
                     if (deserializedResponse == null)
                     {
                         Log.Warning("Deserialized response is null, returning fallback data.");
+                        _statisticsService.TrackRequest("ApiFootball", stopwatch.Elapsed.TotalMilliseconds);
+
                         return FallbackUtilites.GetTeamsFallback("Teams data currently unavailable.");
                     }
 
@@ -66,14 +75,18 @@ namespace ApiAggregation.Clients
                         var rootElement = JsonDocument.Parse(jsonString).RootElement;
                         var teams = SortJsonArrayByName(rootElement.GetProperty("response"));
                         var sortedRootJson = JsonSerializer.Serialize(new { response = teams });
+                        _statisticsService.TrackRequest("ApiFootball", stopwatch.Elapsed.TotalMilliseconds);
                         return JsonDocument.Parse(sortedRootJson).RootElement.Clone();
                     }
-
+                    stopwatch.Stop();
+                    _statisticsService.TrackRequest("ApiFootball", stopwatch.Elapsed.TotalMilliseconds);
                     return deserializedResponse;
                 }
                 catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
                 {
                     Log.Warning("Country '{Country}' not found in the football API.", country);
+                    stopwatch.Stop();
+                    _statisticsService.TrackRequest("ApiFootball", stopwatch.Elapsed.TotalMilliseconds);
                     return FallbackUtilites.GetTeamsFallback("Country not found in the football API.");
                 }
                 catch (Exception ex)
@@ -84,6 +97,8 @@ namespace ApiAggregation.Clients
                     if (retryCount >= MaxRetries)
                     {
                         Log.Error("Max retries reached. Returning fallback data for teams API.");
+                        stopwatch.Stop();
+                        _statisticsService.TrackRequest("ApiFootball", stopwatch.Elapsed.TotalMilliseconds);
                         return FallbackUtilites.GetTeamsFallback("Unable to fetch teams data after retries.");
                     }
 
@@ -91,7 +106,9 @@ namespace ApiAggregation.Clients
                     delay *= 2;
                 }
             }
-
+            // Return fallback in case of unknown failure
+            stopwatch.Stop();
+            _statisticsService.TrackRequest("ApiFootball", stopwatch.Elapsed.TotalMilliseconds);
             return FallbackUtilites.GetTeamsFallback("Unexpected error occurred.");
         }
 

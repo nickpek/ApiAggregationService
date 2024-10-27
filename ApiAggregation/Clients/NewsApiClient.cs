@@ -1,5 +1,7 @@
-﻿using ApiAggregation.Utilities;
+﻿using ApiAggregation.Services;
+using ApiAggregation.Utilities;
 using Serilog;
+using System.Diagnostics;
 using System.Text.Json;
 
 namespace ApiAggregation.Clients
@@ -10,14 +12,18 @@ namespace ApiAggregation.Clients
         private readonly string _apiKey = "289d0bae47784394a56c52b21155d647";
         private const int MaxRetries = 3;
         private readonly TimeSpan InitialDelay = TimeSpan.FromSeconds(2);
+        private readonly ApiStatisticsService _statisticsService;
 
-        public NewsApiClient(HttpClient httpClient)
+        public NewsApiClient(HttpClient httpClient, ApiStatisticsService statisticsService)
         {
             _httpClient = httpClient;
+            _statisticsService = statisticsService;
         }
 
         public async Task<object> GetDataAsync(string? country = null)
         {
+            var stopwatch = Stopwatch.StartNew();
+
             try
             {
                 // Validate input with error handling
@@ -26,6 +32,7 @@ namespace ApiAggregation.Clients
             catch (ArgumentException ex)
             {
                 Log.Warning(ex, "Invalid country code provided: {Country}", country);
+                _statisticsService.TrackRequest("NewsApi", stopwatch.Elapsed.TotalMilliseconds);
                 return FallbackUtilites.GetNewsFallback("Invalid country code provided.");
             }
 
@@ -58,12 +65,18 @@ namespace ApiAggregation.Clients
                     using var response = await _httpClient.SendAsync(request);
                     response.EnsureSuccessStatusCode();
 
+                    stopwatch.Stop();
+                    _statisticsService.TrackRequest("NewsApi", stopwatch.Elapsed.TotalMilliseconds);
+
+
                     // Parse JSON response
                     var jsonString = await response.Content.ReadAsStringAsync();
                     var deserializedResponse = JsonSerializer.Deserialize<object>(jsonString);
                     if (deserializedResponse == null)
                     {
                         Log.Warning("Deserialized response is null, returning fallback data.");
+                        stopwatch.Stop();
+                        _statisticsService.TrackRequest("NewsApi", stopwatch.Elapsed.TotalMilliseconds);
                         return FallbackUtilites.GetNewsFallback("News data currently unavailable.");
                     }
 
@@ -73,6 +86,8 @@ namespace ApiAggregation.Clients
                 {
                     // Handle specific status codes, e.g., Not Found
                     Log.Warning("Country '{Country}' not found in the news API.", country);
+                    stopwatch.Stop();
+                    _statisticsService.TrackRequest("NewsApi", stopwatch.Elapsed.TotalMilliseconds);
                     return FallbackUtilites.GetNewsFallback("Country not found in the news API.");
                 }
                 catch (Exception ex)
@@ -95,6 +110,8 @@ namespace ApiAggregation.Clients
             }
 
             // Return fallback in case of unknown failure
+            stopwatch.Stop();
+            _statisticsService.TrackRequest("NewsApi", stopwatch.Elapsed.TotalMilliseconds);
             return FallbackUtilites.GetNewsFallback("Unexpected error occurred.");
         }
 

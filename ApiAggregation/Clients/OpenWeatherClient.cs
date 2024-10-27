@@ -1,5 +1,7 @@
-﻿using ApiAggregation.Utilities;
+﻿using ApiAggregation.Services;
+using ApiAggregation.Utilities;
 using Serilog;
+using System.Diagnostics;
 using System.Text.Json;
 
 namespace ApiAggregation.Clients
@@ -10,14 +12,20 @@ namespace ApiAggregation.Clients
         private readonly string _apiKey = "8a937d73802006b74ec8384472056e32";
         private const int MaxRetries = 3;
         private readonly TimeSpan InitialDelay = TimeSpan.FromSeconds(2);
+        private readonly ApiStatisticsService _statisticsService;
 
-        public OpenWeatherClient(HttpClient httpClient)
+
+        public OpenWeatherClient(HttpClient httpClient, ApiStatisticsService statisticsService)
         {
             _httpClient = httpClient;
+            _statisticsService = statisticsService;
+
         }
 
         public async Task<object> GetDataAsync(string? city)
         {
+            var stopwatch = Stopwatch.StartNew();
+
             try
             {
                 ValidateCityInput(city);
@@ -25,6 +33,7 @@ namespace ApiAggregation.Clients
             catch (ArgumentException ex)
             {
                 Log.Warning(ex, "Invalid city name provided: {City}", city);
+                _statisticsService.TrackRequest("OpenWeather", stopwatch.Elapsed.TotalMilliseconds);
                 return FallbackUtilites.GetWeatherFallback("Invalid city name provided.");
             }
 
@@ -43,6 +52,10 @@ namespace ApiAggregation.Clients
 
                     // Ensure the request was successful
                     response.EnsureSuccessStatusCode();
+
+
+                    stopwatch.Stop();
+                    _statisticsService.TrackRequest("OpenWeather", stopwatch.Elapsed.TotalMilliseconds);
 
                     // Check if content is available before attempting to parse
                     var jsonString = await response.Content.ReadAsStringAsync();
@@ -63,20 +76,22 @@ namespace ApiAggregation.Clients
                 }
                 catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
                 {
-                    // Handle specific status codes, e.g., Not Found
                     Log.Warning("City '{City}' not found in the weather API.", city);
+                    stopwatch.Stop();
+                    _statisticsService.TrackRequest("OpenWeather", stopwatch.Elapsed.TotalMilliseconds);
                     return FallbackUtilites.GetWeatherFallback("City not found.");
                 }
                 catch (Exception ex)
                 {
                     retryCount++;
-
                     Log.Warning(ex, "Error fetching weather data for '{City}' on attempt {RetryCount}", city, retryCount);
 
                     // Check if retries have been exhausted
                     if (retryCount >= MaxRetries)
                     {
                         Log.Error("Max retries reached. Returning fallback data for city '{City}'", city);
+                        stopwatch.Stop();
+                        _statisticsService.TrackRequest("OpenWeather", stopwatch.Elapsed.TotalMilliseconds);
                         return FallbackUtilites.GetWeatherFallback("Unable to fetch weather data after retries.");
                     }
 
@@ -85,6 +100,8 @@ namespace ApiAggregation.Clients
                 }
             }
 
+            stopwatch.Stop();
+            _statisticsService.TrackRequest("OpenWeather", stopwatch.Elapsed.TotalMilliseconds);
             // Return fallback in case of unknown failure
             return FallbackUtilites.GetWeatherFallback("Unexpected error occurred.");
         }
