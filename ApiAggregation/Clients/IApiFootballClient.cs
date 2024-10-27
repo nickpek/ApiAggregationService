@@ -4,6 +4,6 @@ namespace ApiAggregation.Clients
 {
     public interface IApiFootballClient
     {
-        Task<JsonElement> GetTeamsDataAsync(string country, bool sortByName = true);
+        Task<object> GetTeamsDataAsync(string? country, bool sortByName = true);
     }
 }

@@ -4,7 +4,7 @@ namespace ApiAggregation.Utilities
 {
     public static class FallbackUtilites
     {
-        public static object GetWeatherFallback(string reason)
+        public static object GetWeatherFallback(string? reason)
         {
             return new
             {
@@ -15,7 +15,7 @@ namespace ApiAggregation.Utilities
             };
         }
 
-        public static object GetNewsFallback(string reason)
+        public static object GetNewsFallback(string? reason)
         {
             return new
             {
@@ -37,13 +37,30 @@ namespace ApiAggregation.Utilities
                 }
             };
         }
-
-        public static JsonElement GetTeamsFallback(string reason)
+        public static object GetTeamsFallback(string? reason)
         {
-            var fallbackJson = $"{{ \"status\": \"error\", \"message\": \"{reason}\" }}";
-            using var jsonDocument = JsonDocument.Parse(fallbackJson);
-            return jsonDocument.RootElement.Clone();
+            return new
+            {
+                status = "error",
+                message = reason,
+                response = new[]
+                {
+                    new
+                    {
+                        team = new
+                        {
+                            id = -1,
+                            name = "Fallback Team",
+                            code = "N/A",
+                            country = "Unknown",
+                            founded = (int?)null,
+                            national = false,
+                        },
+                    }
+                }
+            };
         }
+
     }
 
 }

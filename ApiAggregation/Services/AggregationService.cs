@@ -19,57 +19,61 @@ namespace ApiAggregation.Services
         public async Task<Dictionary<string, object>> GetAggregatedDataAsync(string? city = null, string? country = null, bool sortByTeamName = true)
         {
             var result = new Dictionary<string, object>();
-
             var (countryCode, countryName) = ParseCountryInput(country);
 
-            // Fetch weather data with error handling OpenWeatherClient
+            // Set up tasks for each API call to run them in parallel
+            var weatherTask = GetWeatherDataAsync(city);
+            var newsTask = GetNewsDataAsync(countryCode);
+            var footballTask = GetFootballDataAsync(countryName, sortByTeamName);
+            
+            // Await all tasks to complete
+            await Task.WhenAll(weatherTask, newsTask, footballTask ?? Task.CompletedTask);
+
+            // Collect results from each completed task
+            result["weather"] = weatherTask.Result ?? FallbackUtilites.GetWeatherFallback(city);
+            result["news"] = newsTask.Result ?? FallbackUtilites.GetNewsFallback("News data currently unavailable.");
+            result["football"] = footballTask?.Result ?? FallbackUtilites.GetTeamsFallback("Teams data currently unavailable.");
+
+            return result;
+        }
+
+        private async Task<object?> GetWeatherDataAsync(string? city)
+        {
             try
             {
-                var weatherData = await _openWeatherClient.GetDataAsync(city);
-                result.Add("weather", weatherData);
+                return await _openWeatherClient.GetDataAsync(city);
             }
             catch (Exception ex)
             {
                 Log.Error(ex, "Failed to retrieve weather data for city {City}", city);
-                result.Add("weather", FallbackUtilites.GetWeatherFallback(city));
-
+                return null;
             }
-            // Fetch news data with error handling NewsApiClient
+        }
+
+        private async Task<object?> GetNewsDataAsync(string? countryCode)
+        {
             try
             {
-                var newsData = await _newsApiClient.GetDataAsync(countryCode);
-                result.Add("news", newsData);
-
+                return await _newsApiClient.GetDataAsync(countryCode);
             }
             catch (Exception ex)
             {
                 Log.Error(ex, "Failed to retrieve news data for country {Country}", countryCode);
-                result.Add("news", FallbackUtilites.GetNewsFallback("News data currently unavailable."));
-
+                return null;
             }
-            // Fetch football teams data with country name for filtering and sorting by team name if specified
-            if (!string.IsNullOrEmpty(countryName))
+        }
+
+        private async Task<object?> GetFootballDataAsync(string? countryName, bool sortByTeamName)
+        {
+            try
             {
-                try
-                {
-                    var teamsData = await _apiFootballClient.GetTeamsDataAsync(countryName, sortByTeamName);
-                    result.Add("football", teamsData);
-                }
-                catch (Exception ex)
-                {
-                    Log.Error(ex, "Failed to retrieve football data for country {CountryName}", countryName);
-                    result.Add("football", FallbackUtilites.GetTeamsFallback("Teams data currently unavailable."));
-                }
+                return await _apiFootballClient.GetTeamsDataAsync(countryName, sortByTeamName);
             }
-            else
+            catch (Exception ex)
             {
-                Log.Warning("Country name not provided. Skipping football data retrieval.");
+                Log.Error(ex, "Failed to retrieve football data for country {CountryName}", countryName);
+                return null;
             }
-
-
-
-            return result;
-
         }
         public static (string? countryCode, string? countryName) ParseCountryInput(string? country)
         {

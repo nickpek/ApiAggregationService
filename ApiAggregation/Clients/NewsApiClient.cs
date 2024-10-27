@@ -60,7 +60,14 @@ namespace ApiAggregation.Clients
 
                     // Parse JSON response
                     var jsonString = await response.Content.ReadAsStringAsync();
-                    return JsonSerializer.Deserialize<object>(jsonString);
+                    var deserializedResponse = JsonSerializer.Deserialize<object>(jsonString);
+                    if (deserializedResponse == null)
+                    {
+                        Log.Warning("Deserialized response is null, returning fallback data.");
+                        return FallbackUtilites.GetNewsFallback("News data currently unavailable.");
+                    }
+
+                    return deserializedResponse;
                 }
                 catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
                 {

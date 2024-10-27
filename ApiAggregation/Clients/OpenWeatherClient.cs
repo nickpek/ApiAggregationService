@@ -1,5 +1,6 @@
 ﻿using ApiAggregation.Utilities;
 using Serilog;
+using System.Text.Json;
 
 namespace ApiAggregation.Clients
 {
@@ -43,8 +44,22 @@ namespace ApiAggregation.Clients
                     // Ensure the request was successful
                     response.EnsureSuccessStatusCode();
 
-                    // Parse JSON response
-                    return await response.Content.ReadFromJsonAsync<object>();
+                    // Check if content is available before attempting to parse
+                    var jsonString = await response.Content.ReadAsStringAsync();
+                    if (string.IsNullOrWhiteSpace(jsonString))
+                    {
+                        Log.Warning("Received empty JSON response for city: {City}", city);
+                        return FallbackUtilites.GetWeatherFallback("Weather data currently unavailable.");
+                    }
+                    // Attempt to deserialize JSON content
+                    var deserializedResponse = JsonSerializer.Deserialize<object>(jsonString);
+                    if (deserializedResponse == null)
+                    {
+                        Log.Warning("Deserialized response is null for city: {City}. Returning fallback data.", city);
+                        return FallbackUtilites.GetWeatherFallback("Weather data currently unavailable.");
+                    }
+
+                    return deserializedResponse;
                 }
                 catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
                 {

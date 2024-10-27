@@ -175,8 +175,24 @@ Fallback mechanism response:
         "description": "Please try again later.",
         "url": "#",
         "urlToImage": "#",
-        "publishedAt": "2024-10-27T21:31:38.3806432Z",
+        "publishedAt": "2024-10-27T22:14:15.0299247Z",
         "content": "N/A"
+      }
+    ]
+  },
+  "football": {
+    "status": "error",
+    "message": "Invalid country code provided.",
+    "response": [
+      {
+        "team": {
+          "id": -1,
+          "name": "Fallback Team",
+          "code": "N/A",
+          "country": "Unknown",
+          "founded": null,
+          "national": false
+        }
       }
     ]
   }

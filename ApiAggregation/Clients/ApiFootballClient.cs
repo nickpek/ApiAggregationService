@@ -23,8 +23,19 @@ namespace ApiAggregation.Clients
             _httpClient.DefaultRequestHeaders.Add("Accept", "application/json");
         }
 
-        public async Task<JsonElement> GetTeamsDataAsync(string country, bool sortByName = true)
+        public async Task<object> GetTeamsDataAsync(string? country, bool sortByName = true)
         {
+            try
+            {
+                // Validate input with error handling
+                ValidateCountryInput(country);
+            }
+            catch (ArgumentException ex)
+            {
+                Log.Warning(ex, "Invalid country code provided: {Country}", country);
+                return FallbackUtilites.GetTeamsFallback("Invalid country code provided.");
+            }
+
             int retryCount = 0;
             TimeSpan delay = InitialDelay;
 
@@ -39,49 +50,49 @@ namespace ApiAggregation.Clients
                     var response = await _httpClient.GetAsync(url);
                     response.EnsureSuccessStatusCode();
 
-                    // Parse JSON response as JsonDocument
-                    using var jsonDocument = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-                    var root = jsonDocument.RootElement;
+                    // Parse JSON response
+                    var jsonString = await response.Content.ReadAsStringAsync();
+                    var deserializedResponse = JsonSerializer.Deserialize<object>(jsonString);
 
-                    var teams = root.GetProperty("response");
+                    if (deserializedResponse == null)
+                    {
+                        Log.Warning("Deserialized response is null, returning fallback data.");
+                        return FallbackUtilites.GetTeamsFallback("Teams data currently unavailable.");
+                    }
 
-                    // Apply sorting if requested
+                    // Sort the teams if requested
                     if (sortByName)
-                        teams = SortJsonArrayByName(teams);
+                    {
+                        var rootElement = JsonDocument.Parse(jsonString).RootElement;
+                        var teams = SortJsonArrayByName(rootElement.GetProperty("response"));
+                        var sortedRootJson = JsonSerializer.Serialize(new { response = teams });
+                        return JsonDocument.Parse(sortedRootJson).RootElement.Clone();
+                    }
 
-                    // Reconstruct the JSON structure with the sorted "response"
-                    var sortedRootJson = JsonSerializer.Serialize(new { response = teams });
-                    using var sortedRootDoc = JsonDocument.Parse(sortedRootJson);
-                    return sortedRootDoc.RootElement.Clone();
-                }
-                catch (HttpRequestException ex) when (retryCount < MaxRetries - 1)
-                {
-                    retryCount++;
-                    Log.Warning(ex, "Attempt {RetryCount} to fetch teams data for country {Country} failed", retryCount, country);
-
-                    // Exponential backoff for retries
-                    await Task.Delay(delay);
-                    delay *= 2;
+                    return deserializedResponse;
                 }
                 catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
                 {
-                    Log.Error("Country not found in the API.");
-                    return FallbackUtilites.GetTeamsFallback("Country not found in the API.");
-                }
-                catch (HttpRequestException)
-                {
-                    Log.Error("Max retries reached. Unable to fetch teams data.");
-                    return FallbackUtilites.GetTeamsFallback("Unable to fetch teams data after retries.");
+                    Log.Warning("Country '{Country}' not found in the football API.", country);
+                    return FallbackUtilites.GetTeamsFallback("Country not found in the football API.");
                 }
                 catch (Exception ex)
                 {
-                    Log.Error(ex, "Unexpected error occurred while fetching teams data for country {Country}", country);
-                    return FallbackUtilites.GetTeamsFallback("Unexpected error occurred.");
+                    retryCount++;
+                    Log.Warning(ex, "Error fetching teams data for country '{Country}' on attempt {RetryCount}", country, retryCount);
+
+                    if (retryCount >= MaxRetries)
+                    {
+                        Log.Error("Max retries reached. Returning fallback data for teams API.");
+                        return FallbackUtilites.GetTeamsFallback("Unable to fetch teams data after retries.");
+                    }
+
+                    await Task.Delay(delay);
+                    delay *= 2;
                 }
             }
 
-            Log.Error("Unknown error: Unable to fetch teams data for country {Country}", country);
-            return FallbackUtilites.GetTeamsFallback("Unknown error.");
+            return FallbackUtilites.GetTeamsFallback("Unexpected error occurred.");
         }
 
         private static JsonElement SortJsonArrayByName(JsonElement teams)
@@ -95,8 +106,16 @@ namespace ApiAggregation.Clients
             using var jsonDocument = JsonDocument.Parse(JsonSerializer.Serialize(sortedTeams));
             return jsonDocument.RootElement.Clone();
         }
+        private static void ValidateCountryInput(string? country)
+        {
+            if (string.IsNullOrWhiteSpace(country))
+            {
+                Log.Warning("Country name validation failed. Provided country name is null or whitespace.");
+                throw new ArgumentException("Country code must be provided.", nameof(country));
+            }
+        }
 
-      
+
     }
 
 }
