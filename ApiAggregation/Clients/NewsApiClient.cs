@@ -9,14 +9,14 @@ namespace ApiAggregation.Clients
     public class NewsApiClient: INewsApiClient
     {
         private readonly HttpClient _httpClient;
-        private readonly CacheService _cacheService;
+        private readonly ICacheService _cacheService;
         private readonly string _apiKey = "289d0bae47784394a56c52b21155d647";
         private const int MaxRetries = 3;
         private readonly TimeSpan InitialDelay = TimeSpan.FromSeconds(2);
         private readonly ApiStatisticsService _statisticsService;
         private static readonly TimeSpan CacheExpiration = TimeSpan.FromMinutes(10);
 
-        public NewsApiClient(HttpClient httpClient, ApiStatisticsService statisticsService, CacheService cacheService)
+        public NewsApiClient(HttpClient httpClient, ApiStatisticsService statisticsService, ICacheService cacheService)
         {
             _httpClient = httpClient;
             _statisticsService = statisticsService;

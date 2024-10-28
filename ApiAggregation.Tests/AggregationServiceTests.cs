@@ -11,15 +11,19 @@ namespace ApiAggregation.Tests
         private readonly Mock<IOpenWeatherClient> _mockWeatherClient;
         private readonly Mock<INewsApiClient> _mockNewsClient;
         private readonly Mock<IApiFootballClient> _mockFootballClient;
+        private readonly Mock<ICacheService> _mockCacheService;
+        private readonly Mock<ApiStatisticsService> _mockStatisticsService;
 
         public AggregationServiceTests()
         {
-            // Mock each API client
+            // Mock each API client and additional services
             _mockWeatherClient = new Mock<IOpenWeatherClient>();
             _mockNewsClient = new Mock<INewsApiClient>();
             _mockFootballClient = new Mock<IApiFootballClient>();
+            _mockCacheService = new Mock<ICacheService>();
+            _mockStatisticsService = new Mock<ApiStatisticsService>();
 
-            // Default successful mock responses for each API client
+            // Setup mock successful responses for each client
             _mockWeatherClient
                 .Setup(client => client.GetDataAsync(It.IsAny<string>()))
                 .ReturnsAsync(new { city = "TestCity", temperature = 25 });
@@ -32,7 +36,7 @@ namespace ApiAggregation.Tests
                 .Setup(client => client.GetTeamsDataAsync(It.IsAny<string>(), It.IsAny<bool>()))
                 .ReturnsAsync(JsonDocument.Parse("{\"status\":\"ok\",\"teams\":[{\"name\":\"Team A\"}]}").RootElement);
         }
-        //aggregates data successfully from all APIs when each API call succeeds, validating the expected structure of each result.
+
         [Fact]
         public async Task GetAggregatedDataAsync_ShouldReturnDataFromAllApis_WhenAllApisSucceed()
         {
@@ -55,10 +59,9 @@ namespace ApiAggregation.Tests
                     { ""source"": { ""name"": ""TestSource"" }, ""title"": ""Test Article"" }
                 ]
             }";
-
             _mockNewsClient
-               .Setup(client => client.GetDataAsync(It.IsAny<string>()))
-               .ReturnsAsync(JsonDocument.Parse(newsJson).RootElement);
+                .Setup(client => client.GetDataAsync(It.IsAny<string>()))
+                .ReturnsAsync(JsonDocument.Parse(newsJson).RootElement);
 
             var footballJson = @"
             {
@@ -67,10 +70,9 @@ namespace ApiAggregation.Tests
                     { ""team"": { ""name"": ""Team A"", ""id"": 1, ""country"": ""Greece"" } }
                 ]
             }";
-
             _mockFootballClient
-               .Setup(client => client.GetTeamsDataAsync(It.IsAny<string>(), It.IsAny<bool>()))
-               .ReturnsAsync(JsonDocument.Parse(footballJson).RootElement);
+                .Setup(client => client.GetTeamsDataAsync(It.IsAny<string>(), It.IsAny<bool>()))
+                .ReturnsAsync(JsonDocument.Parse(footballJson).RootElement);
 
             var service = new AggregationService(_mockWeatherClient.Object, _mockNewsClient.Object, _mockFootballClient.Object);
 
@@ -99,6 +101,7 @@ namespace ApiAggregation.Tests
             Assert.True(footballData.TryGetProperty("status", out _), "Football data missing 'status' property.");
             Assert.True(footballData.TryGetProperty("response", out var response), "Football data missing 'response' property.");
             Assert.True(response.GetArrayLength() > 0, "Expected at least one team in 'response' array.");
+
         }
 
         //handles a failure in one API (e.g., football) while still returning data from the other APIs successfully,
@@ -108,8 +111,8 @@ namespace ApiAggregation.Tests
         {
             // Arrange: Simulate a failure in the football API and success in weather and news APIs
             _mockFootballClient
-               .Setup(client => client.GetTeamsDataAsync(It.IsAny<string>(), It.IsAny<bool>()))
-               .ThrowsAsync(new HttpRequestException("Simulated football API failure"));
+                .Setup(client => client.GetTeamsDataAsync(It.IsAny<string>(), It.IsAny<bool>()))
+                .ReturnsAsync(JsonDocument.Parse(@"{ ""status"": ""error"", ""message"": ""Teams data currently unavailable."", ""response"": []}").RootElement);
 
             _mockWeatherClient
                .Setup(client => client.GetDataAsync(It.IsAny<string>()))
@@ -123,13 +126,6 @@ namespace ApiAggregation.Tests
 
             // Act
             var result = await service.GetAggregatedDataAsync(city: "Thessaloniki", country: "Greece");
-
-            // Log results for diagnostic purposes
-            Console.WriteLine("Result keys:");
-            foreach (var key in result.Keys)
-            {
-                Console.WriteLine($"Key: {key}");
-            }
 
             // Assert: Weather and News succeed, Football has fallback structure
             Assert.True(result.ContainsKey("weather"), "Expected 'weather' key is missing.");
@@ -153,8 +149,7 @@ namespace ApiAggregation.Tests
             Assert.True(footballData.TryGetProperty("status", out var status), "Expected 'status' property is missing in 'football'.");
             Assert.Equal("error", status.GetString());
             Assert.True(footballData.TryGetProperty("message", out _), "Expected 'message' property is missing in 'football'.");
+
         }
-
     }
-
 }

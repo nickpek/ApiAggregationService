@@ -9,7 +9,7 @@ namespace ApiAggregation.Clients
     public class OpenWeatherClient: IOpenWeatherClient
     {
         private readonly HttpClient _httpClient;
-        private readonly CacheService _cacheService;
+        private readonly ICacheService _cacheService;
         private readonly string _apiKey = "8a937d73802006b74ec8384472056e32";
         private const int MaxRetries = 3;
         private readonly TimeSpan InitialDelay = TimeSpan.FromSeconds(2);
@@ -18,7 +18,7 @@ namespace ApiAggregation.Clients
 
 
 
-        public OpenWeatherClient(HttpClient httpClient, ApiStatisticsService statisticsService, CacheService cacheService)
+        public OpenWeatherClient(HttpClient httpClient, ApiStatisticsService statisticsService, ICacheService cacheService)
         {
             _httpClient = httpClient;
             _statisticsService = statisticsService;

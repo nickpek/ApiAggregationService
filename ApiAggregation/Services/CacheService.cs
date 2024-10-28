@@ -3,7 +3,13 @@ using Serilog;
 
 namespace ApiAggregation.Services
 {
-    public class CacheService
+    public interface ICacheService
+    {
+        T? Get<T>(string key);
+        void Set<T>(string key, T value, TimeSpan expiration);
+    }
+
+    public class CacheService : ICacheService
     {
         private readonly IMemoryCache _cache;
 
@@ -14,28 +20,17 @@ namespace ApiAggregation.Services
 
         public T? Get<T>(string key)
         {
-            try
-            {
-                // Attempt to retrieve the cached value; return default if it doesn't exist
-                return _cache.TryGetValue(key, out T? value) ? value : default;
-            }
-            catch (Exception ex)
-            {
-                // Log error if there's an issue retrieving the item
-                Log.Error(ex, "Cache retrieval failed for key: {Key}", key);
-                return default;
-            }
+            _cache.TryGetValue(key, out T? value);
+            return value;
         }
-
         public void Set<T>(string key, T value, TimeSpan expiration)
         {
-            // Define cache entry options with an absolute expiration
             var cacheEntryOptions = new MemoryCacheEntryOptions
             {
                 AbsoluteExpirationRelativeToNow = expiration
             };
             _cache.Set(key, value, cacheEntryOptions);
         }
-
     }
+
 }

@@ -19,7 +19,7 @@ builder.Services.AddHttpClient<IApiFootballClient, ApiFootballClient>();
 
 builder.Services.AddMemoryCache();
 builder.Services.AddScoped<AggregationService>();
-builder.Services.AddSingleton<CacheService>();
+builder.Services.AddSingleton<ICacheService, CacheService>();
 builder.Services.AddSingleton<ApiStatisticsService>();
 
 
