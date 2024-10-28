@@ -10,6 +10,7 @@ This service combines these datasets into a single, unified API response, allowi
 ## Table of Contents
 - [Setup](#setup)
 - [Configuration](#configuration)
+- [Caching Strategy](#caching-strategy)
 - [API Endpoints](#api-endpoints)
 - [Testing](#testing)
 - [Contributing](#contributing)
@@ -41,8 +42,19 @@ This service combines these datasets into a single, unified API response, allowi
 4. **Run the application**:
     dotnet run
 
-## Setup
-Ensure your configuration files (e.g., appsettings.json and appsettings.Development.json) include your API key and other necessary environment settings.
+## Configuration
+Ensure your configuration files (e.g., `appsettings.json` and `appsettings.Development.json`) include your API keys and other necessary environment settings.
+
+## Caching Strategy
+To improve performance and minimize redundant API calls, the service utilizes a **CacheService** to store API responses in memory temporarily. This approach benefits from:
+- **Reduced Response Time**: Cached responses allow for near-instant retrieval of frequently requested data.
+- **Minimized API Load**: Limits unnecessary requests to external APIs.
+
+### Cache Duration
+The cache expiration is set to **10 minutes** for each API client (e.g., Weather, News, and Football). This duration can be customized as per requirements.
+
+### Cache Implementation
+Each API request generates a unique cache key based on its parameters (e.g., city or country). On a cache hit, the cached data is returned, bypassing the API call. Otherwise, the client fetches fresh data, which is then stored in the cache.
 
 ## API Endpoints
 1. **Endpoint 1: Aggrefated Data**
@@ -198,9 +210,9 @@ Fallback mechanism response:
   }
 }
 
-2. **Endpoint 1: Aggrefated Data**
+2. **Endpoint 2: Statistics**
 ### GET /api/data/statistics
-Provides request count and average response times for each API, grouped by performance buckets.
+Provides statistics on total API requests, average response times, and performance buckets (fast, average, slow). This data helps identify bottlenecks and optimize performance.
 
 Example Request:
 GET http://localhost:5076/api/statistics/request-stats

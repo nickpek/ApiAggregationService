@@ -17,8 +17,9 @@ builder.Services.AddScoped<INewsApiClient, NewsApiClient>();
 builder.Services.AddScoped<IApiFootballClient, ApiFootballClient>();
 builder.Services.AddHttpClient<IApiFootballClient, ApiFootballClient>();
 
-
+builder.Services.AddMemoryCache();
 builder.Services.AddScoped<AggregationService>();
+builder.Services.AddSingleton<CacheService>();
 builder.Services.AddSingleton<ApiStatisticsService>();
 
 

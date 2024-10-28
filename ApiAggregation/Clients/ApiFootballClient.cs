@@ -10,15 +10,18 @@ namespace ApiAggregation.Clients
     public class ApiFootballClient : IApiFootballClient
     {
         private readonly HttpClient _httpClient;
+        private readonly CacheService _cacheService;
         private readonly string _apiKey;
         private const int MaxRetries = 3;
         private readonly TimeSpan InitialDelay = TimeSpan.FromSeconds(2);
         private readonly ApiStatisticsService _statisticsService;
+        private static readonly TimeSpan CacheExpiration = TimeSpan.FromMinutes(10);
 
-        public ApiFootballClient(HttpClient httpClient, IConfiguration configuration, ApiStatisticsService statisticsService)
+        public ApiFootballClient(HttpClient httpClient, IConfiguration configuration, ApiStatisticsService statisticsService, CacheService cacheService)
         {
             _httpClient = httpClient;
             _statisticsService = statisticsService;
+            _cacheService = cacheService;
 
             _apiKey = configuration["ApiKeys:ApiFootball"]
                       ?? throw new ArgumentNullException("API key for Api-Football is missing.");
@@ -35,76 +38,89 @@ namespace ApiAggregation.Clients
             {
                 // Validate input with error handling
                 ValidateCountryInput(country);
+
+                // Define a unique cache key for the request based on the country and sort order
+                var cacheKey = $"football_teams_{country?.ToLower()}_{sortByName}";
+                var cachedData = _cacheService.Get<object>(cacheKey);
+
+                if (cachedData != null)
+                {
+                    //We skip the API call
+                    _statisticsService.TrackRequest("ApiFootball", 0); // Cached requests are near-zero in time
+                    return cachedData;
+                }
+                int retryCount = 0;
+                TimeSpan delay = InitialDelay;
+
+                while (retryCount < MaxRetries)
+                {
+                    try
+                    {
+                        // Construct URL with the country filter
+                        var url = $"https://v3.football.api-sports.io/teams?country={country}";
+
+                        // Fetch data
+                        var response = await _httpClient.GetAsync(url);
+                        response.EnsureSuccessStatusCode();
+
+                        // Parse JSON response
+                        var jsonString = await response.Content.ReadAsStringAsync();
+                        var deserializedResponse = JsonSerializer.Deserialize<object>(jsonString);
+
+                        if (deserializedResponse == null)
+                        {
+                            Log.Warning("Deserialized response is null, returning fallback data.");
+                            _statisticsService.TrackRequest("ApiFootball", stopwatch.Elapsed.TotalMilliseconds);
+
+                            return FallbackUtilites.GetTeamsFallback("Teams data currently unavailable.");
+                        }
+
+                        // Sort the teams if requested
+                        if (sortByName)
+                        {
+                            var rootElement = JsonDocument.Parse(jsonString).RootElement;
+                            var teams = SortJsonArrayByName(rootElement.GetProperty("response"));
+                            var sortedRootJson = JsonSerializer.Serialize(new { response = teams });
+                            _statisticsService.TrackRequest("ApiFootball", stopwatch.Elapsed.TotalMilliseconds);
+                            return JsonDocument.Parse(sortedRootJson).RootElement.Clone();
+                        }
+                        stopwatch.Stop();
+                        _statisticsService.TrackRequest("ApiFootball", stopwatch.Elapsed.TotalMilliseconds);
+                        // Cache the response and return it
+                        _cacheService.Set(cacheKey, deserializedResponse, TimeSpan.FromMinutes(10)); 
+                        return deserializedResponse;
+                    }
+                    catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
+                    {
+                        Log.Warning("Country '{Country}' not found in the football API.", country);
+                        stopwatch.Stop();
+                        _statisticsService.TrackRequest("ApiFootball", stopwatch.Elapsed.TotalMilliseconds);
+                        return FallbackUtilites.GetTeamsFallback("Country not found in the football API.");
+                    }
+                    catch (Exception ex)
+                    {
+                        retryCount++;
+                        Log.Warning(ex, "Error fetching teams data for country '{Country}' on attempt {RetryCount}", country, retryCount);
+
+                        if (retryCount >= MaxRetries)
+                        {
+                            Log.Error("Max retries reached. Returning fallback data for teams API.");
+                            stopwatch.Stop();
+                            _statisticsService.TrackRequest("ApiFootball", stopwatch.Elapsed.TotalMilliseconds);
+                            return FallbackUtilites.GetTeamsFallback("Unable to fetch teams data after retries.");
+                        }
+
+                        await Task.Delay(delay);
+                        delay *= 2;
+                    }
+                }
             }
             catch (ArgumentException ex)
             {
                 Log.Warning(ex, "Invalid country code provided: {Country}", country);
+                stopwatch.Stop();
                 _statisticsService.TrackRequest("ApiFootball", stopwatch.Elapsed.TotalMilliseconds);
                 return FallbackUtilites.GetTeamsFallback("Invalid country code provided.");
-            }
-
-            int retryCount = 0;
-            TimeSpan delay = InitialDelay;
-
-            while (retryCount < MaxRetries)
-            {
-                try
-                {
-                    // Construct URL with the country filter
-                    var url = $"https://v3.football.api-sports.io/teams?country={country}";
-
-                    // Fetch data
-                    var response = await _httpClient.GetAsync(url);
-                    response.EnsureSuccessStatusCode();
-
-                    // Parse JSON response
-                    var jsonString = await response.Content.ReadAsStringAsync();
-                    var deserializedResponse = JsonSerializer.Deserialize<object>(jsonString);
-
-                    if (deserializedResponse == null)
-                    {
-                        Log.Warning("Deserialized response is null, returning fallback data.");
-                        _statisticsService.TrackRequest("ApiFootball", stopwatch.Elapsed.TotalMilliseconds);
-
-                        return FallbackUtilites.GetTeamsFallback("Teams data currently unavailable.");
-                    }
-
-                    // Sort the teams if requested
-                    if (sortByName)
-                    {
-                        var rootElement = JsonDocument.Parse(jsonString).RootElement;
-                        var teams = SortJsonArrayByName(rootElement.GetProperty("response"));
-                        var sortedRootJson = JsonSerializer.Serialize(new { response = teams });
-                        _statisticsService.TrackRequest("ApiFootball", stopwatch.Elapsed.TotalMilliseconds);
-                        return JsonDocument.Parse(sortedRootJson).RootElement.Clone();
-                    }
-                    stopwatch.Stop();
-                    _statisticsService.TrackRequest("ApiFootball", stopwatch.Elapsed.TotalMilliseconds);
-                    return deserializedResponse;
-                }
-                catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
-                {
-                    Log.Warning("Country '{Country}' not found in the football API.", country);
-                    stopwatch.Stop();
-                    _statisticsService.TrackRequest("ApiFootball", stopwatch.Elapsed.TotalMilliseconds);
-                    return FallbackUtilites.GetTeamsFallback("Country not found in the football API.");
-                }
-                catch (Exception ex)
-                {
-                    retryCount++;
-                    Log.Warning(ex, "Error fetching teams data for country '{Country}' on attempt {RetryCount}", country, retryCount);
-
-                    if (retryCount >= MaxRetries)
-                    {
-                        Log.Error("Max retries reached. Returning fallback data for teams API.");
-                        stopwatch.Stop();
-                        _statisticsService.TrackRequest("ApiFootball", stopwatch.Elapsed.TotalMilliseconds);
-                        return FallbackUtilites.GetTeamsFallback("Unable to fetch teams data after retries.");
-                    }
-
-                    await Task.Delay(delay);
-                    delay *= 2;
-                }
             }
             // Return fallback in case of unknown failure
             stopwatch.Stop();
